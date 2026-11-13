@@ -29,20 +29,20 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk QuickDrawRedirect.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk AndroidMacro.apk
 
       - name: Upload APK as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QuickDrawRedirect-apk
-          path: QuickDrawRedirect.apk
+          name: AndroidMacro-apk
+          path: AndroidMacro.apk
 
       - name: Publish to the "latest" release (direct download link)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest QuickDrawRedirect.apk \
-            --title "Quick Draw Redirect (latest build)" \
-            --notes "Built from ${GITHUB_SHA}. Download QuickDrawRedirect.apk on your MovinkPad and install it. See README for setup." \
+          gh release create latest AndroidMacro.apk \
+            --title "Android Macro (latest build)" \
+            --notes "Built from ${GITHUB_SHA}. Download AndroidMacro.apk on your MovinkPad and install it. See README for setup." \
             --target "${GITHUB_SHA}"

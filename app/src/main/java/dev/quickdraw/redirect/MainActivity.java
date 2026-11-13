@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
         boolean on = isServiceEnabled();
         serviceStatus.setText(on
                 ? "✅ Service is ON"
-                : "❌ Service is OFF. Tap below, find \"Quick Draw Redirect\" (often under \"Downloaded apps\" or \"Installed apps\") and turn it on.");
+                : "❌ Service is OFF. Tap below, find \"Android Macro\" (often under \"Downloaded apps\" or \"Installed apps\") and turn it on.");
         openAccessibility.setText(on ? "Accessibility settings" : "Open Accessibility settings");
 
         enabledSwitch.setChecked(Prefs.enabled(prefs));
