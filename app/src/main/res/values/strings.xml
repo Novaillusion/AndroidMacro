@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Quick Draw Redirect</string>
+    <string name="service_label">Quick Draw Redirect</string>
+    <string name="service_description">Notices when the pen\'s Quick Draw gesture opens Wacom Canvas and switches to the app you picked (or the home screen). It only sees which app comes to the front, never what is on screen.</string>
+</resources>
