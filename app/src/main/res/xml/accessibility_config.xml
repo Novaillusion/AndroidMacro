@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only listens for "a new screen/app came to the front". It never reads window content. -->
+<!-- Only listens for "a new screen came to the front" in Wacom Canvas. It never reads window content.
+     Limiting packageNames means no other app's events are sent to this service at all,
+     so it stays asleep while you use other apps. The service updates this list at runtime
+     if you pick a different Quick Draw app. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
+    android:packageNames="com.wacom.wacomui.wacomcanvas"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault"
     android:canRetrieveWindowContent="false"

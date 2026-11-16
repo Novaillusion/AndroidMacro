@@ -1,6 +1,7 @@
 package dev.quickdraw.redirect;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.KeyguardManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -14,10 +15,17 @@ import android.os.SystemClock;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
- * Watches which app comes to the front. When the Quick Draw app (Wacom Canvas) appears
- * right after the tablet wakes, it switches to whatever the user chose instead.
+ * Watches for the Quick Draw app (Wacom Canvas) coming to the front right after the tablet
+ * wakes, and switches to whatever the user chose instead.
+ *
+ * Battery notes:
+ *  - The service only subscribes to events from the Quick Draw app (packageNames), so the
+ *    system doesn't send it anything while you use other apps.
+ *  - It redirects at most once per screen-on, so it can never get stuck in a
+ *    redirect loop that keeps the screen awake.
  */
-public class RedirectService extends AccessibilityService {
+public class RedirectService extends AccessibilityService
+        implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     /** Quick Draw opens Canvas within a moment of the screen turning on. */
     private static final long WAKE_WINDOW_MS = 3000;
@@ -27,8 +35,11 @@ public class RedirectService extends AccessibilityService {
     private static final long SWITCH_DELAY_MS = 150;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
     private long screenOnAt = 0;
     private long lastRedirectAt = 0;
+    /** True until we redirect; re-armed each time the screen turns on. */
+    private boolean armed = true;
     private boolean receiverRegistered = false;
 
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
@@ -36,6 +47,7 @@ public class RedirectService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
                 screenOnAt = SystemClock.elapsedRealtime();
+                armed = true;
             }
         }
     };
@@ -43,6 +55,10 @@ public class RedirectService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        prefs = Prefs.get(this);
+        prefs.registerOnSharedPreferenceChangeListener(this);
+        applyPackageFilter();
+
         IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -52,34 +68,51 @@ public class RedirectService extends AccessibilityService {
         receiverRegistered = true;
     }
 
+    /** Only receive events from the Quick Draw app; nothing from any other app. */
+    private void applyPackageFilter() {
+        AccessibilityServiceInfo info = getServiceInfo();
+        if (info == null) return;
+        info.packageNames = new String[] { Prefs.trigger(prefs) };
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
+        setServiceInfo(info);
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences p, String key) {
+        if (Prefs.KEY_TRIGGER.equals(key)) {
+            applyPackageFilter();
+        }
+    }
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return;
         }
         CharSequence pkg = event.getPackageName();
-        if (pkg == null) return;
+        if (pkg == null || prefs == null) return;
 
-        SharedPreferences p = Prefs.get(this);
-        if (!Prefs.enabled(p)) return;
-        if (!Prefs.trigger(p).contentEquals(pkg)) return;
+        if (!Prefs.enabled(prefs)) return;
+        if (!Prefs.trigger(prefs).contentEquals(pkg)) return;
 
         long now = SystemClock.elapsedRealtime();
         if (now - lastRedirectAt < COOLDOWN_MS) return;
 
-        if (Prefs.onlyAfterWake(p)) {
-            // Only act when Canvas was opened by Quick Draw, not when you open it yourself.
+        if (Prefs.onlyAfterWake(prefs)) {
+            // Only once per wake, and only when Canvas was opened by Quick Draw.
+            if (!armed) return;
             boolean justWoke = screenOnAt > 0 && (now - screenOnAt) < WAKE_WINDOW_MS;
             KeyguardManager km = getSystemService(KeyguardManager.class);
             boolean overLockScreen = km != null && km.isKeyguardLocked();
             if (!justWoke && !overLockScreen) return;
         }
 
+        armed = false;
         screenOnAt = 0;
         lastRedirectAt = now;
-        p.edit().putLong(Prefs.KEY_LAST_REDIRECT, System.currentTimeMillis()).apply();
+        prefs.edit().putLong(Prefs.KEY_LAST_REDIRECT, System.currentTimeMillis()).apply();
 
-        final String mode = Prefs.mode(p);
+        final String mode = Prefs.mode(prefs);
         handler.postDelayed(() -> redirect(mode), SWITCH_DELAY_MS);
     }
 
@@ -110,6 +143,9 @@ public class RedirectService extends AccessibilityService {
     @Override
     public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        if (prefs != null) {
+            prefs.unregisterOnSharedPreferenceChangeListener(this);
+        }
         if (receiverRegistered) {
             try {
                 unregisterReceiver(screenReceiver);
